@@ -1,6 +1,6 @@
 # app.py
 # Diabetes Prediction App (Pima Indians Dataset)
-# Author: Your Name
+# Author: Jehad AlAzzeh
 # Python 3.10+
 
 from __future__ import annotations
@@ -64,9 +64,6 @@ def train_model(
     """Train a RandomForestClassifier with sensible defaults."""
     model = RandomForestClassifier(
         n_estimators=200,
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
         random_state=random_state,
         n_jobs=-1,
     )
@@ -110,17 +107,17 @@ def evaluate_model(
 
 # ------------------------------ UI ------------------------------------ #
 def section_dataset_preview(df: pd.DataFrame) -> None:
-    st.header("A) Dataset preview & quick summary")
+    st.subheader("Dataset preview & quick summary")
     st.caption(
         "Pima Indians Diabetes dataset from Plotly. "
         "Target column: **Outcome** (0 = No Diabetes, 1 = Diabetes)."
     )
 
-    with st.expander("How to read this section", expanded=False):
+    with st.expander("ℹ️ How to read this section", expanded=False):
         st.write(
             "- **Shape** shows rows × columns.\n"
             "- **Class balance** helps check for imbalance in Outcome.\n"
-            "- A mild imbalance is normal here; we stratify the split to preserve it."
+            "- A mild imbalance is normal here; stratification preserves it in splits."
         )
 
     st.write(f"**Shape:** {df.shape[0]} rows × {df.shape[1]} columns")
@@ -137,9 +134,11 @@ def section_dataset_preview(df: pd.DataFrame) -> None:
 
 
 def section_train_evaluate(df: pd.DataFrame) -> None:
-    st.header("B) Train & evaluate")
+    st.subheader("Train & evaluate your model")
+
     with st.container(border=True):
         c1, c2, c3 = st.columns([1, 1, 1])
+
         with c1:
             test_size = st.slider(
                 "Test size (fraction)",
@@ -148,7 +147,9 @@ def section_train_evaluate(df: pd.DataFrame) -> None:
                 step=0.05,
                 value=0.20,
                 help="Portion of data held out for testing (stratified on Outcome).",
+                key="train_test_size",
             )
+
         with c2:
             rnd_state = st.number_input(
                 "Random state",
@@ -157,9 +158,13 @@ def section_train_evaluate(df: pd.DataFrame) -> None:
                 value=DEFAULT_RANDOM_STATE,
                 step=1,
                 help="Used everywhere to keep results reproducible.",
+                key="train_random_state",
             )
+
         with c3:
-            train_btn = st.button("Train & Evaluate", use_container_width=True)
+            train_btn = st.button(
+                "Train & Evaluate", use_container_width=True, key="train_button"
+            )
 
         if train_btn:
             with st.spinner("Training RandomForest and evaluating..."):
@@ -169,7 +174,6 @@ def section_train_evaluate(df: pd.DataFrame) -> None:
                 model = train_model(X_train, y_train, random_state=int(rnd_state))
                 acc, roc = evaluate_model(model, X_test, y_test)
 
-            # Save to session state for the live prediction section
             st.session_state["trained_model"] = model
             st.session_state["feature_names"] = list(X_train.columns)
 
@@ -191,23 +195,16 @@ def section_train_evaluate(df: pd.DataFrame) -> None:
             plt.close(fig)
         else:
             st.info(
-                "Set parameters then click **Train & Evaluate** to compute metrics and show feature importances."
+                "👆 Adjust parameters, then click **Train & Evaluate** to compute metrics and view feature importances."
             )
 
 
 def section_live_prediction() -> None:
-    st.header("C) Live prediction")
+    st.subheader("Live prediction form")
     st.caption(
-        "Enter patient metrics to predict the **probability of diabetes** using the current model."
+        "Enter patient metrics to predict the **probability of diabetes** using the trained model."
     )
-    with st.expander("Tips for reliable predictions", expanded=False):
-        st.write(
-            "- If you trained a model above, this form uses that.\n"
-            "- Otherwise, it uses a default model trained on the full dataset.\n"
-            "- Inputs are clipped to reasonable ranges to avoid typos."
-        )
 
-    # Ensure a model is available for the form
     if "trained_model" in st.session_state and "feature_names" in st.session_state:
         model = st.session_state["trained_model"]
         feature_names = st.session_state["feature_names"]
@@ -236,10 +233,11 @@ def section_live_prediction() -> None:
                     value=float(np.clip(default_val, min_val, max_val)),
                     step=step,
                     format="%.3f" if step == 0.1 else "%.0f",
+                    key=f"predict_{feat}",  # unique key per feature
                     help="Median value prefilled. Adjust as needed.",
                 )
 
-        submitted = st.form_submit_button("Predict")
+        submitted = st.form_submit_button("Predict", use_container_width=True)
         if submitted:
             row = pd.DataFrame([values], columns=feature_names)
             proba = infer(model, row)
@@ -248,47 +246,40 @@ def section_live_prediction() -> None:
 
 # ---------------------------- Entrypoint ------------------------------- #
 def main() -> None:
-    st.set_page_config(page_title="Diabetes Predictor", page_icon="🩺", layout="centered")
+    st.set_page_config(page_title="Diabetes Predictor", page_icon="🩺", layout="wide")
 
-    # Subtle cosmetic polish
-    st.markdown(
-        """
-        <style>
-        .stMetric { background: #f7f9fc; padding: 8px 12px; border-radius: 10px; }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.title("🩺 Diabetes Prediction (Random Forest)")
 
-    # Sidebar: quick guide
+    # Sidebar
     with st.sidebar:
-        st.markdown("## How to use")
+        st.markdown("## 📖 How to use")
         st.write(
-            "1. **Preview** the dataset.\n"
-            "2. **Train & Evaluate**: pick test size and random state, then train.\n"
-            "3. **Live Prediction**: enter metrics and click **Predict**."
+            "1. **Dataset Preview** — explore the raw data.\n"
+            "2. **Train & Evaluate** — split data, train model, see metrics.\n"
+            "3. **Live Prediction** — input patient values, get probability."
         )
-        st.markdown("—")
+        st.markdown("---")
         st.caption(
-            "Reproducible with `random_state=42`. No scaling needed (tree model). "
-            "Metrics: Accuracy & ROC AUC."
+            "Built with reproducibility (`random_state=42`). No scaling needed for tree models."
         )
 
-    st.title("Diabetes Prediction (Random Forest)")
-    st.write(
-        "A production-clean Streamlit app using the Pima Indians Diabetes dataset. "
-        "Built with scikit-learn, pandas, numpy, and matplotlib."
+    # Tabs
+    df = load_data()
+    tab1, tab2, tab3 = st.tabs(
+        ["📊 Dataset Preview", "⚙️ Train & Evaluate", "🧾 Live Prediction"]
     )
 
-    df = load_data()
-    section_dataset_preview(df)
-    st.divider()
-    section_train_evaluate(df)
-    st.divider()
-    section_live_prediction()
+    with tab1:
+        section_dataset_preview(df)
+
+    with tab2:
+        section_train_evaluate(df)
+
+    with tab3:
+        section_live_prediction()
 
     st.caption(
-        "© 2025 · Streamlit · scikit-learn · pandas · numpy · matplotlib · All rights reserved. Jehad AlAzzeh"
+        "© 2025 · Streamlit · scikit-learn · pandas · numpy · matplotlib · Built by Jehad AlAzzeh"
     )
 
 
